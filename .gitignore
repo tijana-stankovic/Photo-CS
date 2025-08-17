@@ -1,0 +1,4 @@
+.vscode/
+# Photo Organizer database files
+*.pdb
+
