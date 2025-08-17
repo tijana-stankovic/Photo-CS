@@ -1,195 +1,230 @@
 namespace PhotoDB;
 
+using PhotoStatus;
+using PhotoUtil;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.Serialization.Formatters.Binary;
-using PhotoStatus;
-using PhotoUtil;
+using System.Text.Json;
 
 public class DB {
     public static readonly string DefaultDbFilename = "photo_db.pdb";
-
-    private DBData _data = new();
+    public static readonly int DbVersion = 1;
     private string _dbFilename = DefaultDbFilename;
-    private bool _dataChanged = true;
-    private StatusCode _statusCode = StatusCode.NoError;
 
     public DB(string dbFilename) {
-        SetStatusCode(StatusCode.NoError);
-        SetDbFilename(dbFilename);
+        StatusCode = StatusCode.NoError;
+        DbFilename = dbFilename;
+        Data = new DBData(DbVersion);
+        DataChanged = true;
         ReadDB();
     }
 
-    public bool IsChanged() => _dataChanged;
-    public bool IsSaved() => !_dataChanged;
-    public void DataChanged(bool changed) => _dataChanged = changed;
-    public void DataSaved(bool saved) => _dataChanged = !saved;
+    private DBData Data { get; set; }
+    public StatusCode StatusCode { get; set; }
 
-    public string GetDbFilename() => _dbFilename;
-    public void SetDbFilename(string filename) {
-        if (string.IsNullOrEmpty(filename)) throw new ArgumentException("DB filename must be specified!");
-        if (_dbFilename != filename) {
-            _dbFilename = filename;
-            DataChanged(true);
+    public string DbFilename {
+        get => _dbFilename;
+        set {
+            if (string.IsNullOrEmpty(value)) {
+                throw new ArgumentException("DB filename must be specified!");
+            }
+            if (_dbFilename != value) {
+                _dbFilename = value;
+                DataChanged = true;
+            }
         }
     }
 
-    public StatusCode GetStatusCode() => _statusCode;
-    public void SetStatusCode(StatusCode code) => _statusCode = code;
+    public bool DataChanged { get; set; }
+
+    public bool IsChanged() {
+        return DataChanged;
+    }
+
+    public void DataSaved(bool saved) {
+        DataChanged = !saved;
+    }
+
+    public bool IsSaved() {
+        return !DataChanged;
+    }
 
     public void ReadDB() {
         try {
-            using var stream = new FileStream(_dbFilename, FileMode.Open);
-            // TODO
-            // var formatter = new BinaryFormatter(); 
-            // _data = (DBData)formatter.Deserialize(stream);
-            DataChanged(false);
-            SetStatusCode(StatusCode.NoError);
-        } catch (FileNotFoundException) {
-            SetStatusCode(StatusCode.DbFileDoesNotExist);
-        // TODO
-        // } catch (SerializationException) {
-        //     SetStatusCode(StatusCode.DbFileIncompatibleFormat);
-        } catch (IOException) {
-            SetStatusCode(StatusCode.DbFileReadError);
+            var json = File.ReadAllText(DbFilename);
+            var data = JsonSerializer.Deserialize<DBData>(json);
+
+            if (data == null) {
+                StatusCode = StatusCode.DbFileIncompatibleFormat;
+                return;
+            }
+
+            if (data.DbVersion != DbVersion) {
+                StatusCode = StatusCode.DbFileIncompatibleFormat;
+                return;
+            }
+
+            Data = data;
+            DataChanged = false;
+            StatusCode = StatusCode.NoError;
+            
+        } catch (FileNotFoundException) { // File not found
+            StatusCode = StatusCode.DbFileDoesNotExist;
+        } catch (JsonException) { // e.g. file exists, but is empty
+            StatusCode = StatusCode.DbFileIncompatibleFormat;
+        } catch (Exception) { // Read error
+            StatusCode = StatusCode.DbFileReadError;
         }
     }
 
     public void WriteDB() {
         try {
-            using var stream = new FileStream(_dbFilename, FileMode.Create);
-            // TODO
-            // var formatter = new BinaryFormatter();
-            // formatter.Serialize(stream, _data);
+            var json = JsonSerializer.Serialize(Data, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(DbFilename, json);
             DataSaved(true);
-            SetStatusCode(StatusCode.NoError);
-        // TODO
-        // } catch (SerializationException) {
-        //     SetStatusCode(StatusCode.DbFileNotSerializable);
-        } catch (IOException) {
-            SetStatusCode(StatusCode.DbFileWriteError);
+            StatusCode = StatusCode.NoError;
+        } catch (Exception) { // Write error
+            StatusCode = StatusCode.DbFileWriteError;
         }
     }
 
     public int AddFile(DBFile file) {
         var keywords = new HashSet<string>();
-        int oldID = _data.GetFileID(file.GetFullpath());
-        if (oldID != 0) {
-            file.SetID(oldID);
-            keywords = GetFile(oldID).GetKeywords();
-            RemoveFile(oldID);
+        int oldFileID = Data.GetFileID(file.Fullpath);
+
+        if (oldFileID != 0) {
+            file.ID = oldFileID;
+            var f = GetFile(oldFileID);
+            if (f != null) {
+                keywords = f.Keywords;
+            }
+            RemoveFile(oldFileID);
         } else {
-            file.SetID(NextFileID());
+            file.ID = NextFileID();
         }
 
-        _data.AddFile(file);
-        int id = file.GetID();
-        _data.AddFilePath(file.GetFullpath(), id);
-        _data.AddFileLocation(file.GetLocation(), id);
-        _data.AddFileFilename(file.GetFilename(), id);
-        _data.AddFileExtension(file.GetExtension(), id);
-        _data.AddFileTimestamp(file.GetTimestamp(), id);
-        _data.AddFileSize(file.GetSize(), id);
-        _data.AddFileChecksum(file.GetChecksum(), id);
+        Data.AddFile(file);
+        int fileID = file.ID;
+        Data.AddFilePath(file.Fullpath, fileID);
+        Data.AddFileLocation(file.Location, fileID);
+        Data.AddFileFilename(file.Filename, fileID);
+        Data.AddFileExtension(file.Extension, fileID);
+        Data.AddFileTimestamp(file.Timestamp, fileID);
+        Data.AddFileSize(file.Size, fileID);
+        Data.AddFileChecksum(file.Checksum, fileID);
 
-        if (oldID != 0) {
-            foreach (var keyword in keywords) AddKeyword(keyword, id);
-        }
-
-        foreach (var meta in file.GetMetadata()) {
-            _data.AddFileMetadataTag(meta.GetTag(), id);
-        }
-
-        foreach (var pid in _data.FindPotentialDuplicatesIDs(file.GetSize(), file.GetChecksum())) {
-            if (pid != id) {
-                file.AddPotentialDuplicate(pid);
-                var other = _data.GetFile(pid);
-                other?.AddPotentialDuplicate(id);
-                _data.AddPotentialDuplicate(id);
-                _data.AddPotentialDuplicate(pid);
-                AddKeyword("DUP?", id);
-                AddKeyword("DUP?", pid);
+        if (oldFileID != 0) {
+            foreach (var keyword in keywords) {
+                AddKeyword(keyword, fileID);
             }
         }
 
-        DataChanged(true);
-        return oldID;
+        foreach (var meta in file.Metadata) {
+            Data.AddFileMetadataTag(meta.Tag, fileID);
+        }
+
+        foreach (var potentialDuplicateFileID in Data.FindPotentialDuplicatesIDs(file.Size, file.Checksum)) {
+            if (potentialDuplicateFileID != fileID) {
+                file.AddPotentialDuplicate(potentialDuplicateFileID);
+                var potentialDuplicateFile = Data.GetFile(potentialDuplicateFileID);
+                potentialDuplicateFile?.AddPotentialDuplicate(fileID);
+                Data.AddPotentialDuplicate(fileID);
+                Data.AddPotentialDuplicate(potentialDuplicateFileID);
+                AddKeyword("DUP?", fileID);
+                AddKeyword("DUP?", potentialDuplicateFileID);
+            }
+        }
+
+        DataChanged = true;
+
+        return oldFileID;
     }
 
-    public void RemoveFile(int id) {
-        var file = _data.GetFile(id);
+    public void RemoveFile(int fileID) {
+        var file = Data.GetFile(fileID);
         if (file == null) return;
 
-        _data.RemoveFile(id);
-        _data.RemoveFilePath(file.GetFullpath());
-        _data.RemoveFileLocation(file.GetLocation(), id);
-        _data.RemoveFileFilename(file.GetFilename(), id);
-        _data.RemoveFileExtension(file.GetExtension(), id);
-        _data.RemoveFileTimestamp(file.GetTimestamp(), id);
-        _data.RemoveFileSize(file.GetSize(), id);
-        _data.RemoveFileChecksum(file.GetChecksum(), id);
+        Data.RemoveFile(fileID);
+        Data.RemoveFilePath(file.Fullpath);
+        Data.RemoveFileLocation(file.Location, fileID);
+        Data.RemoveFileFilename(file.Filename, fileID);
+        Data.RemoveFileExtension(file.Extension, fileID);
+        Data.RemoveFileTimestamp(file.Timestamp, fileID);
+        Data.RemoveFileSize(file.Size, fileID);
+        Data.RemoveFileChecksum(file.Checksum, fileID);
 
-        foreach (var kw in file.GetKeywords()) _data.RemoveFileKeyword(kw, id);
-        foreach (var meta in file.GetMetadata()) _data.RemoveFileMetadataTag(meta.GetTag(), id);
+        foreach (var keyword in file.Keywords) {
+            Data.RemoveFileKeyword(keyword, fileID);
+        }
+        foreach (var metadataInfo in file.Metadata) {
+            Data.RemoveFileMetadataTag(metadataInfo.Tag, fileID);
+        }
 
         RemoveFileDuplicateInformation(file);
-        DataChanged(true);
+
+        DataChanged = true;
     }
 
     public void RemoveFileDuplicateInformation(DBFile file) {
-        int id = file.GetID();
+        int fileID = file.ID;
 
-        foreach (var dupID in file.GetDuplicates()) {
-            var dup = _data.GetFile(dupID);
-            dup?.RemoveDuplicate(id);
-            if (dup?.GetDuplicates().Count == 0) {
-                _data.RemoveDuplicate(dupID);
-                RemoveKeyword("DUP", dupID);
+        foreach (var duplicateFileID in file.Duplicates) {
+            var duplicateFile = Data.GetFile(duplicateFileID);
+            duplicateFile?.RemoveDuplicate(fileID);
+            if (duplicateFile?.Duplicates.Count == 0) {
+                Data.RemoveDuplicate(duplicateFileID);
+                RemoveKeyword("DUP", duplicateFileID);
             }
         }
 
-        foreach (var pid in file.GetPotentialDuplicates()) {
-            var other = _data.GetFile(pid);
-            other?.RemovePotentialDuplicate(id);
-            if (other?.GetPotentialDuplicates().Count == 0) {
-                _data.RemovePotentialDuplicate(pid);
-                RemoveKeyword("DUP?", pid);
+        foreach (var potentialDuplicateFileID in file.PotentialDuplicates) {
+            var potentialDuplicateFile = Data.GetFile(potentialDuplicateFileID);
+            potentialDuplicateFile?.RemovePotentialDuplicate(fileID);
+            if (potentialDuplicateFile?.PotentialDuplicates.Count == 0) {
+                Data.RemovePotentialDuplicate(potentialDuplicateFileID);
+                RemoveKeyword("DUP?", potentialDuplicateFileID);
             }
         }
 
-        file.SetDuplicates(null);
-        file.SetPotentialDuplicates(null);
-        _data.RemoveDuplicate(id);
-        _data.RemovePotentialDuplicate(id);
-        RemoveKeyword("DUP", id);
-        RemoveKeyword("DUP?", id);
+        file.Duplicates = new();
+        file.PotentialDuplicates = new();
+        Data.RemoveDuplicate(fileID);
+        RemoveKeyword("DUP", fileID);
+        Data.RemovePotentialDuplicate(fileID);
+        RemoveKeyword("DUP?", fileID);
+
+        DataChanged = true;
     }
 
     public Dictionary<int, int> ProcessDuplicates(int fileID) {
-        var found = new Dictionary<int, int>();
-        var file = _data.GetFile(fileID);
-        var candidates = _data.FindPotentialDuplicatesIDs(file.GetSize(), file.GetChecksum());
-        var confirmed = new HashSet<int> { fileID };
-
-        foreach (var id in candidates) {
-            if (id != fileID && FileSystem.CompareFiles(file.GetFullpath(), _data.GetFile(id).GetFullpath())) {
-                confirmed.Add(id);
+        HashSet<int> duplicatesIDs = new();
+        duplicatesIDs.Add(fileID);
+        DBFile file = Data.GetFile(fileID)!;
+        foreach (int duplicateFileID in Data.FindPotentialDuplicatesIDs(file.Size, file.Checksum)) {
+            if (duplicateFileID != fileID) {
+                DBFile duplicateFile = Data.GetFile(duplicateFileID)!;
+                if (FileSystem.CompareFiles(file.Fullpath, duplicateFile.Fullpath)) {
+                    duplicatesIDs.Add(duplicateFileID);
+                }
             }
         }
 
-        if (confirmed.Count > 1) {
-            foreach (var id in confirmed) {
-                RemoveFileDuplicateInformation(_data.GetFile(id));
-                found[id] = confirmed.Count - 1;
+        Dictionary<int, int> duplicatesFound = new();
+        int numOfDuplicates = duplicatesIDs.Count - 1;
+        if (numOfDuplicates > 0) {
+            foreach (int fID in duplicatesIDs) {
+                RemoveFileDuplicateInformation(Data.GetFile(fID)!);
+                duplicatesFound[fID] = numOfDuplicates;
             }
-            foreach (var id in confirmed) {
-                var f = _data.GetFile(id);
-                foreach (var dupID in confirmed) {
-                    if (id != dupID) {
-                        f.AddDuplicate(dupID);
-                        AddKeyword("DUP", id);
-                        _data.AddDuplicate(id);
+
+            foreach (int fID in duplicatesIDs) {
+                file = Data.GetFile(fID)!;
+                foreach (int fDupID in duplicatesIDs) {
+                    if (fID != fDupID) {
+                        file.AddDuplicate(fDupID);
+                        AddKeyword("DUP", fID);
+                        Data.AddDuplicate(fID);
                     }
                 }
             }
@@ -197,39 +232,80 @@ public class DB {
             RemoveFileDuplicateInformation(file);
         }
 
-        DataChanged(true);
-        return found;
+        DataChanged = true;
+
+        return duplicatesFound;
     }
 
-    public int NextFileID() => _data.NextFileID();
-    public int GetFileID(string fullpath) => _data.GetFileID(fullpath);
-    public int GetFileID(string location, string filename, string extension) => _data.GetFileID(location, filename, extension);
-    public DBFile? GetFile(int fileID) => _data.GetFile(fileID);
+    public int NextFileID() { 
+        return Data.NextFileID();
+    }
+
+    public int GetFileID(string fullpath) {
+        return Data.GetFileID(fullpath);
+    }
+
+    public int GetFileID(string location, string filename, string extension) {
+        return Data.GetFileID(location, filename, extension);
+    }
+
+    public DBFile? GetFile(int fileID) { 
+        return Data.GetFile(fileID);
+    }
 
     public HashSet<int>? GetFileIDs(string key, char where) {
-        return where switch {
-            'F' => _data.GetFileID(key) is var id && id != 0 ? new HashSet<int> { id } : null,
-            'D' => _data.GetFileIDsInLocation(key),
-            'K' => _data.GetFileIDsWithKeyword(key),
-            _ => throw new ArgumentException("Invalid location type")
-        };
+        HashSet<int>? fileIDs = null;
+        switch (char.ToUpper(where)) {
+            case 'F': {
+                int fileID = Data.GetFileID(key);
+                if (fileID != 0) {
+                    fileIDs = new HashSet<int>();
+                    fileIDs.Add(fileID);
+                }
+                break;
+            }
+            case 'D': {
+                fileIDs = Data.GetFileIDsInLocation(key);
+                break;
+            }
+            case 'K': {
+                fileIDs = Data.GetFileIDsWithKeyword(key);
+                break;
+            }
+            default: {
+                throw new ArgumentException("Method DB.GetFileIDs() - Invalid 'where' parameter value!");
+            }
+        }
+        return fileIDs;
     }
 
     public void AddKeyword(string keyword, int fileID) {
-        var file = _data.GetFile(fileID);
-        file?.AddKeyword(keyword);
-        _data.AddFileKeyword(keyword, fileID);
-        DataChanged(true);
+        var file = Data.GetFile(fileID);
+        if (file != null) {
+            file.AddKeyword(keyword);
+            Data.AddFileKeyword(keyword, fileID);
+            DataChanged = true;
+        }
     }
 
     public void RemoveKeyword(string keyword, int fileID) {
-        var file = _data.GetFile(fileID);
-        file?.RemoveKeyword(keyword);
-        _data.RemoveFileKeyword(keyword, fileID);
-        DataChanged(true);
+        var file = Data.GetFile(fileID);
+        if (file != null) {
+            file.RemoveKeyword(keyword);
+            Data.RemoveFileKeyword(keyword, fileID);
+            DataChanged = true;
+        }
     }
 
-    public List<string> GetKeywords() => _data.GetKeywords();
-    public List<string> GetDirectories() => _data.GetDirectories();
-    public Dictionary<string, int> GetDBStatistics() => _data.GetDBStatistics();
+    public List<string> GetKeywords() {
+        return Data.GetKeywords();
+    }
+
+    public List<string> GetDirectories() { 
+        return Data.GetDirectories(); 
+    }
+
+    public Dictionary<string, int> GetDBStatistics() { 
+        return Data.GetDBStatistics();
+    }
 }

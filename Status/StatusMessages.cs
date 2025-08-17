@@ -11,7 +11,6 @@ public class StatusMessages {
         { StatusCode.DbFileDirKeywordDoesNotExist, "ERROR: The file, directory, or keyword does not exist in the database." },
         { StatusCode.DbFileIncompatibleFormat, "ERROR: The database file is in incompatible format." },
         { StatusCode.DbFileReadError, "ERROR: An error occurred while reading the database file." },
-        { StatusCode.DbFileNotSerializable, "ERROR: Data object is not serializable.\nCheck: All data classes (DBData, DBFile, etc.) must implement the Serializable interface." },
         { StatusCode.DbFileWriteError, "ERROR: An error occurred while writing to the database file." },
         { StatusCode.InvalidNumberOfArguments, "ERROR: Invalid number of arguments." },
         { StatusCode.PathDoesNotExist, "ERROR: Path does not exists." },

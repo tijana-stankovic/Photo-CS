@@ -5,87 +5,94 @@ using PhotoDB;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Security.Cryptography;
+using System.IO.Hashing;
+using MetadataExtractor;
 
 public class FileSystem {
-    private static StatusCode _statusCode;
-
-    public static StatusCode GetStatusCode() => _statusCode;
-    public static void SetStatusCode(StatusCode newStatusCode) => _statusCode = newStatusCode;
-
-    public FileSystem() {}
+    public static StatusCode StatusCode { get; set; }
 
     public static char CheckPath(string path) {
-        if (File.Exists(path)) return 'F';
-        if (Directory.Exists(path)) return 'D';
-        return 'E';
+        if (File.Exists(path)) {
+            return 'F'; // it's a file
+        } else if (System.IO.Directory.Exists(path)) {
+            return 'D'; // it's a directory
+        } 
+        return 'E'; // path doesn't exist
     }
 
     public static List<string> FilesInDirectory(string directory) {
         var listOfFiles = new List<string>();
-        SetStatusCode(StatusCode.NoError);
 
-        try {
-            listOfFiles.Add(Path.GetFullPath(directory));
-            listOfFiles.AddRange(Directory.GetFiles(directory).Select(Path.GetFullPath));
-        } catch (IOException) {
-            SetStatusCode(StatusCode.FileSystemError);
+        StatusCode = StatusCode.NoError;
+
+        var dirInfo = new DirectoryInfo(directory);
+        if (dirInfo.Exists) {
+            try {
+                // add the full absolute directory path as the first element in the result
+                listOfFiles.Add(Path.GetFullPath(directory));
+
+                foreach (var file in dirInfo.GetFiles()) {
+                    listOfFiles.Add(file.FullName);
+                }
+            } catch (IOException) {
+                StatusCode = StatusCode.FileSystemError;
+            }
         }
 
         return listOfFiles;
     }
 
     public static DBFile GetFileInformation(string filename) {
-        SetStatusCode(StatusCode.NoError);
+        StatusCode = StatusCode.NoError;
 
         var dbFile = new DBFile();
+
         try {
-            var fileInfo = new FileInfo(filename);
-            if (!fileInfo.Exists || (fileInfo.Attributes & FileAttributes.Directory) == FileAttributes.Directory) {
-                SetStatusCode(StatusCode.FileSystemNotFile);
-                return dbFile;
+            if (File.Exists(filename)) {
+                var fileInfo = new FileInfo(filename);
+
+                string fullpath = fileInfo.FullName;
+                string location = fileInfo.DirectoryName ?? "";
+                string fname = Path.GetFileNameWithoutExtension(filename);
+                string extension = Path.GetExtension(filename).TrimStart('.');
+                string timestamp = fileInfo.LastWriteTime.ToString("yyyyMMdd HHmmss"); // HH for 24-hour format
+                long size = fileInfo.Length;
+                int checksum = CalculateChecksum(fileInfo);
+                HashSet<MetadataInfo> metadata = ReadMetadata(fileInfo);
+
+                dbFile.Fullpath = fullpath;
+                dbFile.Location = location;
+                dbFile.Filename = fname;
+                dbFile.Extension = extension;
+                dbFile.Timestamp = timestamp;
+                dbFile.Size = size;
+                dbFile.Checksum = checksum;
+                dbFile.Metadata = metadata;
+            } else {
+                StatusCode = StatusCode.FileSystemNotFile;
             }
-
-            string fullpath = fileInfo.FullName;
-            string location = fileInfo.DirectoryName ?? "";
-            string fname = Path.GetFileNameWithoutExtension(filename);
-            string extension = Path.GetExtension(filename).TrimStart('.');
-            string timestamp = fileInfo.LastWriteTime.ToString("yyyyMMdd HHmmss");
-            long size = fileInfo.Length;
-            long checksum = CalculateChecksum(fileInfo);
-
-            dbFile.SetFullpath(fullpath);
-            dbFile.SetLocation(location);
-            dbFile.SetFilename(fname);
-            dbFile.SetExtension(extension);
-            dbFile.SetTimestamp(timestamp);
-            dbFile.SetSize(size);
-            dbFile.SetChecksum(checksum);
-            dbFile.SetKeywords(new HashSet<string>());
-            dbFile.SetMetadata(new HashSet<MetadataInfo>());
-
         } catch (IOException) {
-            SetStatusCode(StatusCode.FileSystemError);
+            StatusCode = StatusCode.FileSystemError;
         }
 
         return dbFile;
     }
 
-    public static long CalculateChecksum(FileInfo fileInfo) {
-        SetStatusCode(StatusCode.NoError);
+    // calculates the checksum of a file using CRC32
+    // Based on:
+    //   https://stackoverflow.com/questions/8128/how-do-i-calculate-crc32-of-a-string
+    public static int CalculateChecksum(FileInfo fileInfo) {
+        StatusCode = StatusCode.NoError;
+        var crc32 = new Crc32();
         try {
-            using var stream = fileInfo.OpenRead();
-            // TODO
-            //using var crc32 = new Crc32();
-            //byte[] hash = crc32.ComputeHash(stream);
-            // return BitConverter.ToUInt32(hash, 0);
-            return 0;
-        } catch (IOException) {
-            SetStatusCode(StatusCode.FileSystemError);
-            return 0;
+            using var stream = new BufferedStream(fileInfo.OpenRead());
+            crc32.Append(stream);
         }
+        catch (IOException) {
+            StatusCode = StatusCode.FileSystemError;
+        }
+        byte[] hashBytes = crc32.GetCurrentHash();
+        return BitConverter.ToInt32(hashBytes, 0);
     }
 
     public static string ExtractFilename(string filename) {
@@ -96,40 +103,68 @@ public class FileSystem {
         string[] units = {"B", "KB", "MB", "GB", "TB"};
         double size = sizeInBytes;
         int unitIndex = 0;
+
         while (size >= 1024 && unitIndex < units.Length - 1) {
             size /= 1024;
             unitIndex++;
         }
-        return string.Format("{0:0.00} {1}", size, units[unitIndex]);
+
+        return $"{size:F2} {units[unitIndex]}";
+    }
+
+    // Based on README information on:
+    // https://github.com/drewnoakes/metadata-extractor-dotnet
+    public static HashSet<MetadataInfo> ReadMetadata(FileInfo fileInfo) {
+        StatusCode = StatusCode.NoError;
+        var metadataSet = new HashSet<MetadataInfo>();
+
+        try {
+            var directories = ImageMetadataReader.ReadMetadata(fileInfo.FullName);
+            foreach (var directory in directories) {
+                foreach (var tag in directory.Tags) {
+                    metadataSet.Add(new MetadataInfo(directory.Name, tag.Name, tag.Description ?? ""));
+                }
+            }
+        } catch (ImageProcessingException) {
+            StatusCode = StatusCode.FileSystemNotImage;
+        } catch (IOException) {
+            StatusCode = StatusCode.FileSystemError;
+        }
+
+        return metadataSet;
     }
 
     public static bool CompareFiles(string path1, string path2) {
-        SetStatusCode(StatusCode.NoError);
+        StatusCode = StatusCode.NoError;
 
         try {
             var file1 = new FileInfo(path1);
             var file2 = new FileInfo(path2);
 
-            if (!file1.Exists || !file2.Exists || file1.Length != file2.Length) return false;
+            if (!file1.Exists || !file2.Exists || file1.Length != file2.Length) {
+                return false;
+            }
 
             using var stream1 = file1.OpenRead();
             using var stream2 = file2.OpenRead();
-            var buffer1 = new byte[8192];
-            var buffer2 = new byte[8192];
-            int read1, read2;
 
-            do {
-                read1 = stream1.Read(buffer1, 0, buffer1.Length);
-                read2 = stream2.Read(buffer2, 0, buffer2.Length);
+            var buffer1 = new byte[1024];
+            var buffer2 = new byte[1024];
 
-                if (read1 != read2 || !buffer1.AsSpan(0, read1).SequenceEqual(buffer2.AsSpan(0, read2)))
+            int bytesRead1;
+            int bytesRead2;
+
+            while ((bytesRead1 = stream1.Read(buffer1, 0, buffer1.Length)) > 0) {
+                bytesRead2 = stream2.Read(buffer2, 0, buffer2.Length);
+                if (bytesRead1 != bytesRead2 || !buffer1.Take(bytesRead1).SequenceEqual(buffer2.Take(bytesRead2))) {
                     return false;
-            } while (read1 > 0);
-
-            return true;
+                }
+            }            
         } catch (IOException) {
-            SetStatusCode(StatusCode.FileSystemError);
+            StatusCode = StatusCode.FileSystemError;
             return false;
         }
+
+        return true;
     }
 }

@@ -5,134 +5,175 @@ using System;
 using System.Collections.Generic;
 
 public class DBFile {
-    private int _id;
-    private string _fullpath;
-    private string _location;
-    private string _filename;
-    private string _extension;
-    private string _timestamp;
-    private long _size;
-    private long _checksum;
-    private HashSet<string> _keywords;
-    private HashSet<MetadataInfo> _metadata;
-    private HashSet<int> _duplicates;
-    private HashSet<int> _potentialDuplicates;
+    private int _id = 0;
+    private string _fullpath = "";
+    private string _location = "";
+    private string _filename = "";
+    private string _extension = "";
+    private string _timestamp = "";
+    private long _size = 0L;
+    private HashSet<string> _keywords = new();
+    private HashSet<MetadataInfo> _metadata = new();
+    private HashSet<int> _duplicates = new();
+    private HashSet<int> _potentialDuplicates = new();
 
     public DBFile() {
-        _id = 0;
-        _fullpath = "";
-        _location = "";
-        _filename = "";
-        _extension = "";
-        _timestamp = "";
-        _size = 0L;
-        _checksum = 0L;
-        _keywords = new HashSet<string>();
-        _metadata = new HashSet<MetadataInfo>();
-        _duplicates = new HashSet<int>();
-        _potentialDuplicates = new HashSet<int>();
+        Checksum = 0;
     }
 
-    public int GetID() => _id;
-    public void SetID(int id) {
-        if (id <= 0) throw new ArgumentException("File ID must be positive!");
-        _id = id;
+    public DBFile(int id, 
+                string fullpath, string location, string filename, string extension, 
+                string timestamp, long size, int checksum, 
+                HashSet<String> keywords, HashSet<MetadataInfo> metadata,
+                HashSet<int> duplicates, HashSet<int> potentialDuplicates) {
+        ID = id;
+        Fullpath = fullpath;
+        Location = location;
+        Filename= filename;
+        Extension = extension;
+        Timestamp = timestamp;
+        Size = size;
+        Checksum = checksum;
+        Keywords = keywords;
+        Metadata = metadata;
+        Duplicates = duplicates;
+        PotentialDuplicates = potentialDuplicates;
     }
 
-    public string GetFullpath() => _fullpath;
-    public void SetFullpath(string fullpath) {
-        if (string.IsNullOrEmpty(fullpath)) throw new ArgumentException("File path must be specified!");
-        _fullpath = fullpath;
+    public int ID {
+        get => _id;
+        set {
+            if (value <= 0) {
+                throw new ArgumentException("File ID must be positive!");
+            }
+            _id = value;
+        }
     }
 
-    public string GetLocation() => _location;
-    public void SetLocation(string location) {
-        if (string.IsNullOrEmpty(location)) throw new ArgumentException("File location must be specified!");
-        _location = location;
+    public string Fullpath {
+        get => _fullpath;
+        set {
+            if (string.IsNullOrEmpty(value)) {
+                throw new ArgumentException("File path must be specified!");
+            }
+            _fullpath = value;
+        }
     }
 
-    public string GetFilename() => _filename;
-    public void SetFilename(string filename) {
-        if (string.IsNullOrEmpty(filename)) throw new ArgumentException("Filename must be specified!");
-        _filename = filename;
+    public string Location {
+        get => _location;
+        set {
+            if (string.IsNullOrEmpty(value)) {
+                throw new ArgumentException("File location must be specified!");
+            }
+            _location = value;
+        }
     }
 
-    public string GetExtension() => _extension;
-    public void SetExtension(string extension) {
-        if (string.IsNullOrEmpty(extension)) throw new ArgumentException("Extension must be specified!");
-        _extension = extension;
+    public string Filename {
+        get => _filename;
+        set {
+            if (string.IsNullOrEmpty(value)) {
+                throw new ArgumentException("Filename must be specified!");
+            }
+            _filename = value;
+        }
     }
 
-    public string GetTimestamp() => _timestamp;
-    public void SetTimestamp(string timestamp) {
-        if (string.IsNullOrEmpty(timestamp)) throw new ArgumentException("Timestamp must be specified!");
-        _timestamp = timestamp;
+    public string Extension {
+        get => _extension;
+        set {
+            if (value == null) {
+                throw new ArgumentException("Extension must be specified!");
+            }
+            _extension = value;
+        }
     }
 
-    public long GetSize() => _size;
-    public void SetSize(long size) {
-        if (size < 0) throw new ArgumentException("Size must not be negative!");
-        _size = size;
+    public string Timestamp {
+        get => _timestamp;
+        set {
+            if (string.IsNullOrEmpty(value)) {
+                throw new ArgumentException("Timestamp must be specified!");
+            }
+            _timestamp = value;
+        }
     }
 
-    public long GetChecksum() => _checksum;
-    public void SetChecksum(long checksum) {
-        _checksum = checksum;
+    public long Size {
+        get => _size;
+        set {
+            if (value < 0) {
+                throw new ArgumentException("Size must not be negative!");
+            }
+            _size = value;
+        }
     }
 
-    public HashSet<string> GetKeywords() => _keywords;
-    public void SetKeywords(HashSet<string> keywords) {
-        _keywords = keywords ?? new HashSet<string>();
+    public int Checksum { get; set; }
+   
+    public HashSet<string> Keywords {
+        get => _keywords;
+        set => _keywords = value ?? new HashSet<string>();
     }
 
-    public HashSet<MetadataInfo> GetMetadata() => _metadata;
-    public void SetMetadata(HashSet<MetadataInfo> metadata) {
-        _metadata = metadata ?? new HashSet<MetadataInfo>();
+    public HashSet<MetadataInfo> Metadata {
+        get => _metadata;
+        set => _metadata = value ?? new HashSet<MetadataInfo>();
     }
 
-    public HashSet<int> GetDuplicates() => _duplicates;
-    public void SetDuplicates(HashSet<int> duplicates) {
-        _duplicates = duplicates ?? new HashSet<int>();
+    public HashSet<int> Duplicates {
+        get => _duplicates;
+        set => _duplicates = value ?? new HashSet<int>();
     }
 
-    public HashSet<int> GetPotentialDuplicates() => _potentialDuplicates;
-    public void SetPotentialDuplicates(HashSet<int> potentialDuplicates) {
-        _potentialDuplicates = potentialDuplicates ?? new HashSet<int>();
+    public HashSet<int> PotentialDuplicates {
+        get => _potentialDuplicates;
+        set => _potentialDuplicates = value ?? new HashSet<int>();
     }
 
     public void AddKeyword(string keyword) {
-        if (string.IsNullOrEmpty(keyword)) throw new ArgumentException("Keyword must be specified!");
-        _keywords.Add(keyword.ToUpper());
+        if (string.IsNullOrEmpty(keyword)) {
+            throw new ArgumentException("Keyword must be specified!");
+        }
+
+        Keywords.Add(keyword.ToUpper());
     }
 
     public void RemoveKeyword(string keyword) {
-        _keywords.Remove(keyword.ToUpper());
+        Keywords.Remove(keyword.ToUpper());
     }
 
     public void AddMetadata(MetadataInfo metadataInfo) {
-        if (metadataInfo == null) throw new ArgumentException("Metadata must be specified!");
-        _metadata.Add(metadataInfo);
+        if (metadataInfo == null) {
+            throw new ArgumentException("Metadata must be specified!");
+        }
+        Metadata.Add(metadataInfo);
     }
 
     public void RemoveMetadata(MetadataInfo metadataInfo) {
-        _metadata.Remove(metadataInfo);
+        Metadata.Remove(metadataInfo);
     }
 
     public void AddDuplicate(int duplicateFileID) {
-        if (duplicateFileID <= 0) throw new ArgumentException("Duplicate file ID must be positive!");
-        _duplicates.Add(duplicateFileID);
+        if (duplicateFileID <= 0) {
+            throw new ArgumentException("Duplicate file ID must be positive!");
+        }
+        Duplicates.Add(duplicateFileID);
     }
 
     public void RemoveDuplicate(int duplicateFileID) {
-        _duplicates.Remove(duplicateFileID);
+        Duplicates.Remove(duplicateFileID);
     }
 
     public void AddPotentialDuplicate(int potentialDuplicateFileID) {
-        if (potentialDuplicateFileID <= 0) throw new ArgumentException("Potential duplicate file ID must be positive!");
-        _potentialDuplicates.Add(potentialDuplicateFileID);
+        if (potentialDuplicateFileID <= 0) {
+            throw new ArgumentException("Potential duplicate file ID must be positive!");
+        }
+        PotentialDuplicates.Add(potentialDuplicateFileID);
     }
 
     public void RemovePotentialDuplicate(int potentialDuplicateFileID) {
-        _potentialDuplicates.Remove(potentialDuplicateFileID);
+        PotentialDuplicates.Remove(potentialDuplicateFileID);
     }
 }

@@ -1,30 +1,28 @@
 namespace PhotoUtil;
 
-using System;
-
 public class MetadataInfo {
-    private string _directory;
-    private string _tag;
-    private string _description;
+    private string _directory = "";
+    private string _tag = "";
+    private string _description = "";
 
     public MetadataInfo(string directory, string tag, string description) {
-        SetDirectory(directory);
-        SetTag(tag);
-        SetDescription(description);
+        Directory = directory;
+        Tag = tag;
+        Description = description;
     }
 
-    public string GetDirectory() => _directory;
-    public void SetDirectory(string directory) {
-        _directory = directory ?? "";
+    public string Directory {
+        get => _directory;
+        set => _directory = value ?? "";
     }
 
-    public string GetTag() => _tag;
-    public void SetTag(string tag) {
-        _tag = tag ?? "";
+    public string Tag {
+        get => _tag;
+        set => _tag = value ?? "";
     }
 
-    public string GetDescription() => _description;
-    public void SetDescription(string description) {
-        _description = description ?? "";
+    public string Description {
+        get => _description;
+        set => _description = value ?? "";
     }
 }

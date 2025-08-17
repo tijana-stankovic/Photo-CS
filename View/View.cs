@@ -5,9 +5,6 @@ using System;
 using System.Collections.Generic;
 
 public class View {
-    public View() {
-    }
-
     public void FullProgramInfo() {
         string version = "1.0";
         string projectName = "Photo Organizer";
@@ -47,7 +44,8 @@ public class View {
 
     public void PrintDBStatistics(Dictionary<string, int> dbStatistics) {
         Print("Current database statistics:");
-        if (dbStatistics.TryGetValue("FILES", out int fileCount) && fileCount > 0) {
+        int fileCount = dbStatistics["FILES"];
+        if (fileCount > 0) {
             Print("   - Number of files: " + fileCount);
             Print("   - Number of directories: " + dbStatistics["DIRS"] + " (use 'LD' command to get a list)");
             Print("   - Number of keywords: " + dbStatistics["KEYS"] + " (use 'LK' command to get a list)");

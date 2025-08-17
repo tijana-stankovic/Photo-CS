@@ -5,61 +5,64 @@ using PhotoDB;
 using PhotoView;
 
 public class Controller {
-    private View _view;
-    private DB _db;
-    private CmdInterpreter _interpreter;
+    private View View { get; set; }
+    private DB Db { get; set; }
+    private CmdInterpreter Interpreter { get; set; }
 
     public Controller(string[] args) {
-        _view = new View();
-        _view.FullProgramInfo();
+        View = new View();
+        View.FullProgramInfo();
 
         string dbFilename = GetFilename(args);
-        _db = new DB(dbFilename);
-        switch (_db.GetStatusCode()) {
-            case StatusCode.NoError:
+        Db = new DB(dbFilename);
+        switch (Db.StatusCode) {
+            case StatusCode.NoError: // do nothing
                 break;
+
             case StatusCode.DbFileDoesNotExist:
             case StatusCode.DbFileIncompatibleFormat:
             case StatusCode.DbFileReadError:
-                _view.PrintStatus(_db.GetStatusCode());
+                View.PrintStatus(Db.StatusCode);
                 break;
+
             default:
-                _view.PrintStatus(StatusCode.UnexpectedStatus);
+                View.PrintStatus(StatusCode.UnexpectedStatus);
                 break;
         }
 
-        _view.Print("");
-        _view.PrintDBStatistics(_db.GetDBStatistics());
+        View.Print("");
+        View.PrintDBStatistics(Db.GetDBStatistics());
 
-        _interpreter = new CmdInterpreter(_db, _view);
+        Interpreter = new CmdInterpreter(Db, View);
     }
 
     private string GetFilename(string[] args) {
         string fileName;
+
         if (args.Length == 0) {
             fileName = DB.DefaultDbFilename;
-            _view.Print("The default name of the DB file will be used: " + fileName);
+            View.Print("The default name of the DB file will be used: " + fileName);
         } else {
             fileName = args[0];
             if (!fileName.Contains('.')) {
                 fileName += ".pdb";
             }
-            _view.Print("The DB filename: " + fileName);
+            View.Print("The DB filename: " + fileName);
         }
+
         return fileName;
     }
 
     public void Run() {
-        _view.Print("");
-        using (CLI cli = new CLI()) {
-            _interpreter.SetCLI(cli);
-            bool quit = false;
-            while (!quit) {
-                _view.PrintPrompt();
-                Command cmd = cli.ReadCommand();
-                _interpreter.ExecuteCommand(cmd);
-                quit = _interpreter.GetQuitSignal();
-            }
+        View.Print("");
+
+        Interpreter.Cli = new CLI();
+        bool quit = false;
+        while (!quit) {
+            View.PrintPrompt();
+            Command cmd = Interpreter.Cli.ReadCommand();
+            Interpreter.ExecuteCommand(cmd);
+            quit = Interpreter.QuitSignal;
         }
     }
 }

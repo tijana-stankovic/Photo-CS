@@ -1,22 +1,16 @@
 namespace PhotoController;
 
+using PhotoView;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using PhotoView;
 
-public class CLI : IDisposable {
-    private TextReader _input;
-
-    public CLI() {
-        _input = Console.In;
-    }
-
+public class CLI {
     public Command ReadCommand() {
         List<string> argList = new List<string>();
 
         try {
-            string? line = _input.ReadLine();
+            string? line = Console.ReadLine();
             if (line != null) {
                 var currentWord = new System.Text.StringBuilder();
                 bool insideQuotes = false;
@@ -27,10 +21,11 @@ public class CLI : IDisposable {
                             insideQuotes = true;
                         } else {
                             insideQuotes = false;
+                            // closing quote, add the quoted parameter
                             argList.Add(currentWord.ToString());
                             currentWord.Clear();
                         }
-                    } else if (char.IsWhiteSpace(c) && !insideQuotes) {
+                    } else if (Char.IsWhiteSpace(c) && !insideQuotes) {
                         if (currentWord.Length > 0) {
                             argList.Add(currentWord.ToString());
                             currentWord.Clear();
@@ -40,6 +35,7 @@ public class CLI : IDisposable {
                     }
                 }
 
+                // add the last word
                 if (currentWord.Length > 0) {
                     argList.Add(currentWord.ToString());
                 }
@@ -48,10 +44,21 @@ public class CLI : IDisposable {
             Console.Error.WriteLine("IOException occurred");
         }
 
-        string cmd = argList.Count > 0 ? argList[0] : "";
-        string[] cmdArgs = argList.Count > 1 ? argList.GetRange(1, argList.Count - 1).ToArray() : Array.Empty<string>();
+        string cmd;
+        string[] cmdArgs;
+        if (argList.Count > 0) {
+            cmd = argList[0];
+            cmdArgs = new string[argList.Count - 1];
+            for (int i = 1; i < argList.Count; i++) {
+                cmdArgs[i - 1] = argList[i];
+            }
+        } else {
+            cmd = "";
+            cmdArgs = Array.Empty<string>();
+        }
 
-        return new Command(cmd, cmdArgs);
+        Command command = new Command(cmd, cmdArgs);
+        return command;
     }
 
     public char AskYesNo(View view, string message, bool cancel) {
@@ -61,7 +68,7 @@ public class CLI : IDisposable {
         while (true) {
             view.Print(message + prompt + ": ", false);
             try {
-                response = _input.ReadLine()?.Trim().ToLower();
+                response = Console.ReadLine()?.Trim().ToLower();
             } catch (IOException) {
                 Console.Error.WriteLine("IOException occurred while reading input");
                 continue;
@@ -76,12 +83,6 @@ public class CLI : IDisposable {
             } else {
                 view.Print("Invalid response. Please enter 'Yes', 'No'" + (cancel ? ", or 'Cancel'" : "") + ".");
             }
-        }
-    }
-
-    public void Dispose() {
-        if (_input != null && _input != Console.In) {
-            _input.Dispose();
         }
     }
 }

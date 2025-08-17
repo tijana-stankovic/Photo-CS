@@ -10,7 +10,6 @@ public enum StatusCode {
     DbFileDirKeywordDoesNotExist,
     DbFileIncompatibleFormat,
     DbFileReadError,
-    DbFileNotSerializable,
     DbFileWriteError,
     InvalidNumberOfArguments,
     PathDoesNotExist,

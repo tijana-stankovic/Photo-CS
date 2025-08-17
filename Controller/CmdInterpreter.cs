@@ -1,481 +1,445 @@
+namespace PhotoController;
+
 using PhotoDB;
 using PhotoStatus;
 using PhotoUtil;
 using PhotoView;
 
-namespace PhotoController;
-
-public class CmdInterpreter
-{
-    private DB _db;
-    private View _view;
-    private StatusCode _statusCode;
-    private bool _quitSignal;
-    private CLI? _cli;
-
-    public CmdInterpreter(DB db, View view)
-    {
-        _db = db;
-        _view = view;
-        _statusCode = StatusCode.NoError;
-        _quitSignal = false;
-        _cli = null;
+public class CmdInterpreter {
+    public CmdInterpreter(DB db, View view) {
+        Db = db;
+        View = view;
+        StatusCode = StatusCode.NoError;
+        QuitSignal = false;
+        Cli = null;
     }
 
-    public StatusCode GetStatusCode() => _statusCode;
+    private View View { get; set; }
+    private DB Db { get; set; }
+    public StatusCode StatusCode { get; set; }
+    public bool QuitSignal { get; set; }
+    public CLI? Cli { get; set; }
 
-    public void SetStatusCode(StatusCode statusCode) => _statusCode = statusCode;
-
-    public bool GetQuitSignal() => _quitSignal;
-
-    public void SetQuitSignal(bool quitSignal) => _quitSignal = quitSignal;
-
-    public void SetCLI(CLI cli) => _cli = cli;
-
-    public void ExecuteCommand(Command cmd)
-    {
-        SetStatusCode(StatusCode.NoError);
+    public void ExecuteCommand(Command cmd) {
+        StatusCode = StatusCode.NoError;
 
         string command = cmd.Name.ToUpper();
 
-        switch (command)
-        {
-            case "":
+        switch (command) {
+            case "": // do nothing
                 break;
+
             case "H":
             case "HELP":
                 Help();
                 break;
+
             case "AB":
             case "ABOUT":
                 About();
                 break;
+
             case "E":
             case "X":
             case "EXIT":
                 Exit();
                 break;
+
             case "SAVE":
                 Save(cmd.Args);
                 break;
+
             case "A":
             case "ADD":
                 Add(cmd.Args);
                 break;
+
             case "AK":
                 AddKeyword(cmd.Args);
                 break;
+
             case "R":
             case "REMOVE":
                 Remove(cmd.Args);
                 break;
+
             case "RK":
                 RemoveKeyword(cmd.Args);
                 break;
+
             case "L":
             case "LIST":
                 List(cmd.Args);
                 break;
+
             case "LK":
                 ListKeywords(cmd.Args);
                 break;
+
             case "LD":
             case "LF":
                 ListDirectories(cmd.Args);
                 break;
+
             case "D":
             case "DETAILS":
                 Details(cmd.Args);
                 break;
+
             case "DUP":
             case "DD":
             case "DUPLICATES":
                 Duplicates(cmd.Args);
                 break;
+
             case "S":
             case "SCAN":
                 Scan(cmd.Args);
                 break;
+
             default:
-                SetStatusCode(StatusCode.UnknownCommand);
-                _view.PrintStatus(GetStatusCode());
+                StatusCode = StatusCode.UnknownCommand;
+                View.PrintStatus(StatusCode);
                 break;
         }
     }
 
-    private void Help()
-    {
-        _view.Print("List of available commands:");
-        _view.Print("- HELP (H)");
-        _view.Print("  Display page with list of commands.");
-        _view.Print("- ABOUT (AB)");
-        _view.Print("  Display information about program.");
-        _view.Print("- EXIT (E, X)");
-        _view.Print("  Exiting the program.");
-        _view.Print("  If there are unsaved changes, the program will display a control question.");
-        _view.Print("- SAVE [<db-filename>]");
-        _view.Print("  Saving the current memory state to a local file.");
-        _view.Print("  Default name for this file: photo_db.pdb");
-        _view.Print("  New filename can be specified as parameter.");
-        _view.Print("  The name of the file can also be specified as a parameter when starting the program.");
-        _view.Print("- ADD (A)");
-        _view.Print("    - ADD <folder> or <filename>");
-        _view.Print("      Adds all images from the specified <folder> or");
-        _view.Print("      only the one specified by <filename> to the in-memory database.");
-        _view.Print("    - ADD KEYWORD <keyword> <folder> or <filename>");
-        _view.Print("      All images from the specified folder <folder> or");
-        _view.Print("      only the one specified by <filename> get the keyword specified by <keyword>.");
-        _view.Print("- AK");
-        _view.Print("  Short form for ADD KEYWORD command. For details, see ADD command.");
-        _view.Print("- REMOVE (R)");
-        _view.Print("    - REMOVE <folder> or <filename>");
-        _view.Print("      Removes all images from the specified <folder> (including the folder) or");
-        _view.Print("      only the one specified by <filename> from the in-memory database.");
-        _view.Print("    - REMOVE KEYWORD <keyword> <folder> or <filename>");
-        _view.Print("      only the one specified by <filename> will have the specified <keyword> removed from them.");
-        _view.Print("- RK");
-        _view.Print("  Short form for REMOVE KEYWORD command. For details, see REMOVE command.");
-        _view.Print("- LIST (L)");
-        _view.Print("    - LIST <keyword> or <folder> or <file>");
-        _view.Print("      Lists all images that have the specified keyword or belong to the specified folder.");
-        _view.Print("    - LIST KEYWORDS (LIST KEYS)");
-        _view.Print("      Lists all existing keywords in the database.");
-        _view.Print("    - LIST DIRECTORIES (LIST DIRS, LIST FOLDERS)");
-        _view.Print("      Lists all existing directories (folders) in the database.");
-        _view.Print("    - LIST");
-        _view.Print("      Displays database statistics.");
-        _view.Print("- LK");
-        _view.Print("  Short form for LIST KEYWORDS command. For details, see LIST command.");
-        _view.Print("- LD (LF)");
-        _view.Print("  Short form for LIST DIRECTORIES command. For details, see LIST command.");
-        _view.Print("- DETAILS (D)");
-        _view.Print("  DETAILS <keyword> or <folder> or <file>");
-        _view.Print("  Lists all images that have the given keyword or belong to the given folder or");
-        _view.Print("  given file and displays detailed information about them.");
-        _view.Print("- DUPLICATES (DUP, DD)");
-        _view.Print("  DUPLICATES <keyword> or <folder> or <file>");
-        _view.Print("  Finds duplicates in a set of images determined by a given parameter (comparing files byte by byte).");
-        _view.Print("- SCAN (S)");
-        _view.Print("  SCAN <keyword> or <folder> or <file>");
-        _view.Print("  Compares the set of images determined by the given parameter with the current state on the disk.");
+    private void Help() {
+        View.Print("List of available commands:");
+        View.Print("- HELP (H)");
+        View.Print("  Display page with list of commands.");
+        View.Print("- ABOUT (AB)");
+        View.Print("  Display information about program.");
+        View.Print("- EXIT (E, X)");
+        View.Print("  Exiting the program.");
+        View.Print("  If there are unsaved changes, the program will display a control question.");
+        View.Print("- SAVE [<db-filename>]");
+        View.Print("  Saving the current memory state to a local file.");
+        View.Print("  Default name for this file: photo_db.pdb");
+        View.Print("  New filename can be specified as parameter.");
+        View.Print("  The name of the file can also be specified as a parameter when starting the program.");
+        View.Print("- ADD (A)");
+        View.Print("    - ADD <folder> or <filename>");
+        View.Print("      Adds all images from the specified <folder> or");
+        View.Print("      only the one specified by <filename> to the in-memory database.");
+        View.Print("    - ADD KEYWORD <keyword> <folder> or <filename>");
+        View.Print("      All images from the specified folder <folder> or");
+        View.Print("      only the one specified by <filename> get the keyword specified by <keyword>.");
+        View.Print("- AK");
+        View.Print("  Short form for ADD KEYWORD command. For details, see ADD command.");
+        View.Print("- REMOVE (R)");
+        View.Print("    - REMOVE <folder> or <filename>");
+        View.Print("      Removes all images from the specified <folder> (including the folder) or");
+        View.Print("      only the one specified by <filename> from the in-memory database.");
+        View.Print("    - REMOVE KEYWORD <keyword> <folder> or <filename>");
+        View.Print("      only the one specified by <filename> will have the specified <keyword> removed from them.");
+        View.Print("- RK");
+        View.Print("  Short form for REMOVE KEYWORD command. For details, see REMOVE command.");
+        View.Print("- LIST (L)");
+        View.Print("    - LIST <keyword> or <folder> or <file>");
+        View.Print("      Lists all images that have the specified keyword or belong to the specified folder.");
+        View.Print("    - LIST KEYWORDS (LIST KEYS)");
+        View.Print("      Lists all existing keywords in the database.");
+        View.Print("    - LIST DIRECTORIES (LIST DIRS, LIST FOLDERS)");
+        View.Print("      Lists all existing directories (folders) in the database.");
+        View.Print("    - LIST");
+        View.Print("      Displays database statistics.");
+        View.Print("- LK");
+        View.Print("  Short form for LIST KEYWORDS command. For details, see LIST command.");
+        View.Print("- LD (LF)");
+        View.Print("  Short form for LIST DIRECTORIES command. For details, see LIST command.");
+        View.Print("- DETAILS (D)");
+        View.Print("  DETAILS <keyword> or <folder> or <file>");
+        View.Print("  Lists all images that have the given keyword or belong to the given folder or");
+        View.Print("  given file and displays detailed information about them.");
+        View.Print("- DUPLICATES (DUP, DD)");
+        View.Print("  DUPLICATES <keyword> or <folder> or <file>");
+        View.Print("  Finds duplicates in a set of images determined by a given parameter (comparing files byte by byte).");
+        View.Print("- SCAN (S)");
+        View.Print("  SCAN <keyword> or <folder> or <file>");
+        View.Print("  Compares the set of images determined by the given parameter with the current state on the disk.");
     }
 
-    private void About()
-    {
-        _view.FullProgramInfo();
+    private void About() {
+        View.FullProgramInfo();
     }
 
-    private void Exit()
-    {
-        if (_db.IsChanged())
-        {
-            if (_cli == null) throw new InvalidOperationException("Interpreter CLI is not initialized!");
+    private void Exit() {
+        if (Db.IsChanged()) {
+            if (Cli == null) {
+                throw new InvalidOperationException("Interpreter CLI is not initialized!");
+            }
 
-            char response = _cli.AskYesNo(_view, "There are unsaved changes. Do you want to save them?", true);
-            switch (response)
-            {
+            char response = Cli.AskYesNo(View, "There are unsaved changes. Do you want to save them?", true);
+            switch (response) {
                 case 'Y':
                     Save();
-                    if (_db.GetStatusCode() == StatusCode.NoError)
-                        SetQuitSignal(true);
+                    if (Db.StatusCode == StatusCode.NoError) {
+                        QuitSignal = true;
+                    }
                     break;
+
                 case 'N':
-                    SetQuitSignal(true);
+                    QuitSignal = true;
                     break;
+
                 case 'C':
                 default:
                     break;
             }
-        }
-        else
-        {
-            SetQuitSignal(true);
+        } else {
+            QuitSignal = true;
         }
     }
 
-    private void Save(string[] args)
-    {
-        if (args.Length > 1)
-        {
-            SetStatusCode(StatusCode.InvalidNumberOfArguments);
-            _view.PrintStatus(GetStatusCode());
+    private void Save(string[] args) {
+        if (args.Length > 1) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
             return;
         }
 
-        if (args.Length == 1)
-        {
+        if (args.Length == 1) {
             string newDbFilename = args[0];
-            if (_db.GetDbFilename() != newDbFilename)
-            {
-                _db.SetDbFilename(newDbFilename);
+            if (Db.DbFilename != newDbFilename) {
+                Db.DbFilename = newDbFilename;
             }
         }
 
         Save();
     }
 
-    private void Save()
-    {
-        if (_db.IsChanged())
-        {
-            _db.WriteDB();
+    private void Save() {
+        if (Db.IsChanged()) {
+            Db.WriteDB();
 
-            switch (_db.GetStatusCode())
-            {
+            switch (Db.StatusCode) {
                 case StatusCode.NoError:
-                    _view.Print($"Changes saved successfully (DB filename: '{_db.GetDbFilename()}').");
+                    View.Print($"Changes saved successfully (DB filename: '{Db.DbFilename}').");
                     break;
-                case StatusCode.DbFileNotSerializable:
+
                 case StatusCode.DbFileWriteError:
-                    _view.PrintStatus(_db.GetStatusCode());
+                    View.PrintStatus(Db.StatusCode);
                     break;
+
                 default:
-                    _view.PrintStatus(StatusCode.UnexpectedStatus);
+                    View.PrintStatus(StatusCode.UnexpectedStatus);
                     break;
             }
-        }
-        else
-        {
-            _view.Print("There are no changes to save.");
+        } else {
+            View.Print("There are no changes to save.");
         }
     }
 
-    private void Add(string[] args)
-    {
-        if (args.Length >= 1 && (args[0].ToUpper() == "KEYWORD" || args[0].ToUpper() == "KEY"))
-        {
+    private void Add(string[] args) {
+        if (args.Length >= 1 && (args[0].ToUpper() == "KEYWORD" || args[0].ToUpper() == "KEY")) {
             AddKeyword(args[1..]);
             return;
         }
 
-        if (args.Length != 1)
-        {
-            SetStatusCode(StatusCode.InvalidNumberOfArguments);
-            _view.PrintStatus(GetStatusCode());
+        if (args.Length != 1) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
             return;
         }
 
         string path = args[0];
-        switch (FileSystem.CheckPath(path))
-        {
+        switch (FileSystem.CheckPath(path)) {
             case 'F':
                 AddFile(path, false);
                 break;
+
             case 'D':
                 AddDirectory(path);
                 break;
+
             case 'E':
-                SetStatusCode(StatusCode.PathDoesNotExist);
-                _view.PrintStatus(GetStatusCode());
+                StatusCode = StatusCode.PathDoesNotExist;
+                View.PrintStatus(StatusCode);
                 break;
+
             default:
                 throw new InvalidOperationException("Unknown FileSystem.CheckPath() result!");
         }
     }
 
-    private void AddFile(string filename, bool fullPath)
-    {
+    private void AddFile(string filename, bool fullPath) {
         string filenameOnly = fullPath ? FileSystem.ExtractFilename(filename) : filename;
-        _view.Print($"Processing file '{filenameOnly}'... ", false);
+        View.Print($"Processing file '{filenameOnly}'... ", false);
 
         DBFile file = FileSystem.GetFileInformation(filename);
 
-        switch (FileSystem.GetStatusCode())
-        {
+        switch (FileSystem.StatusCode) {
             case StatusCode.NoError:
-                _view.Print(_db.AddFile(file) == 0 ? "Added." : "Updated.");
+                if (Db.AddFile(file) == 0) {
+                    View.Print("Added.");
+                } else {
+                    View.Print("Updated.");
+                }
                 break;
+
             case StatusCode.FileSystemError:
-                SetStatusCode(StatusCode.FileSystemError);
-                _view.Print("ERROR! (Error reading file)... Skipped.");
+                StatusCode = StatusCode.FileSystemError;
+                View.Print("ERROR! (Error reading file)... Skipped.");
                 break;
+
             case StatusCode.FileSystemNotFile:
-                _view.Print("WARNING! (Not a file)... Skipped.");
+                View.Print("WARNING! (Not a file)... Skipped.");
                 break;
+
             case StatusCode.FileSystemNotImage:
-                _view.Print("WARNING! (Not an image)... Skipped.");
+                View.Print("WARNING! (Not an image)... Skipped.");
                 break;
+
             default:
                 throw new InvalidOperationException("Unknown FileSystem error code");
         }
     }
 
-    private void AddDirectory(string directory)
-    {
-        _view.Print($"Processing directory '{directory}'... ", false);
+    private void AddDirectory(string directory) {
+        View.Print($"Processing directory '{directory}'... ", false);
         List<string> listOfFiles = FileSystem.FilesInDirectory(directory);
-        if (listOfFiles.Count == 0 || FileSystem.GetStatusCode() == StatusCode.FileSystemError)
-        {
-            SetStatusCode(StatusCode.FileSystemError);
-            _view.PrintStatus(GetStatusCode());
+        if (listOfFiles.Count == 0 || FileSystem.StatusCode == StatusCode.FileSystemError) {
+            StatusCode = StatusCode.FileSystemError;
+            View.PrintStatus(StatusCode);
             return;
         }
 
-        _view.Print($"(found {listOfFiles.Count - 1} file(s))");
-        _view.Print("Full path: " + listOfFiles[0]);
-        for (int i = 1; i < listOfFiles.Count; i++)
-        {
+        View.Print($"(found {listOfFiles.Count - 1} file(s))");
+        View.Print("Full path: " + listOfFiles[0]);
+        for (int i = 1; i < listOfFiles.Count; i++) {
             AddFile(listOfFiles[i], true);
         }
     }
 
-    private void AddKeyword(string[] args)
-    {
-        if (args.Length != 2)
-        {
-            SetStatusCode(StatusCode.InvalidNumberOfArguments);
-            _view.PrintStatus(GetStatusCode());
+    private void AddKeyword(string[] args) {
+        if (args.Length != 2) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
             return;
         }
 
         string keyword = args[0].ToUpper();
         string path = args[1];
 
-        var fileIDs = _db.GetFileIDs(path, 'F');
-        if (fileIDs != null)
-        {
-            _view.Print($"Adding the keyword '{keyword}' to the specified file.");
-        }
-        else
-        {
-            fileIDs = _db.GetFileIDs(path, 'D');
-            if (fileIDs != null)
-            {
-                _view.Print($"Adding the keyword '{keyword}' to files in the specified directory.");
-                _view.Print($"(found {fileIDs.Count} file(s))");
+        var fileIDs = Db.GetFileIDs(path, 'F');
+        if (fileIDs != null) {
+            View.Print($"Adding the keyword '{keyword}' to the specified file.");
+        } else {
+            fileIDs = Db.GetFileIDs(path, 'D');
+            if (fileIDs != null) {
+                View.Print($"Adding the keyword '{keyword}' to files in the specified directory.");
+                View.Print($"(found {fileIDs.Count} file(s))");
             }
         }
 
-        if (fileIDs != null)
-        {
-            foreach (int fileId in fileIDs)
-            {
-                AddKeywordToFile(keyword, fileId);
+        if (fileIDs != null) {
+            foreach (int fileID in fileIDs) {
+                AddKeywordToFile(keyword, fileID);
             }
-        }
-        else
-        {
-            SetStatusCode(StatusCode.DbFileDirDoesNotExist);
-            _view.PrintStatus(GetStatusCode());
+        } else {
+            StatusCode = StatusCode.DbFileDirDoesNotExist;
+            View.PrintStatus(StatusCode);
         }
     }
 
-    private void AddKeywordToFile(string keyword, int fileID)
-    {
-        DBFile file = _db.GetFile(fileID);
-        _view.Print($"Processing file '{file.GetFilename()}.{file.GetExtension()}'... ", false);
-        _db.AddKeyword(keyword, fileID);
-        _view.Print($"Ok (fileID = {fileID}).");
+    private void AddKeywordToFile(string keyword, int fileID) {
+        DBFile? file = Db.GetFile(fileID);
+        if (file != null) {
+            View.Print($"Processing file '{file.Filename}.{file.Extension}'... ", false);
+            Db.AddKeyword(keyword, fileID);
+            View.Print($"Ok (fileID = {fileID}).");
+        }
     }
 
-    private void Remove(string[] args)
-    {
-        if (args.Length >= 1 && (args[0].ToUpper() == "KEYWORD" || args[0].ToUpper() == "KEY"))
-        {
+    private void Remove(string[] args) {
+        if (args.Length >= 1 && (args[0].ToUpper() == "KEYWORD" || args[0].ToUpper() == "KEY")) {
             RemoveKeyword(args[1..]);
             return;
         }
 
-        if (args.Length != 1)
-        {
-            SetStatusCode(StatusCode.InvalidNumberOfArguments);
-            _view.PrintStatus(GetStatusCode());
+        if (args.Length != 1) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
             return;
         }
 
         string path = args[0];
-        var fileIDs = _db.GetFileIDs(path, 'F');
-        if (fileIDs == null)
-        {
-            fileIDs = _db.GetFileIDs(path, 'D');
-            if (fileIDs != null)
-            {
-                _view.Print($"Processing directory '{path}'... ", false);
-                _view.Print($"(found {fileIDs.Count} file(s))");
-            }
-            else
-            {
-                SetStatusCode(StatusCode.DbFileDirDoesNotExist);
-                _view.PrintStatus(GetStatusCode());
+        var fileIDs = Db.GetFileIDs(path, 'F');
+        if (fileIDs == null) {
+            fileIDs = Db.GetFileIDs(path, 'D');
+            if (fileIDs != null) {
+                View.Print($"Processing directory '{path}'... ", false);
+                View.Print($"(found {fileIDs.Count} file(s))");
+            } else {
+                StatusCode = StatusCode.DbFileDirDoesNotExist;
+                View.PrintStatus(StatusCode);
             }
         }
 
-        if (fileIDs != null)
-        {
-            foreach (int fileId in fileIDs.ToList())
-            {
-                RemoveFile(fileId);
+        if (fileIDs != null) {
+            foreach (int fileID in fileIDs.ToList()) {
+                RemoveFile(fileID);
             }
         }
     }
 
-    private void RemoveFile(int fileID)
-    {
-        DBFile file = _db.GetFile(fileID);
-        _view.Print($"Processing file '{file.GetFilename()}.{file.GetExtension()}'... ", false);
-        _db.RemoveFile(fileID);
-        _view.Print("Removed.");
+    private void RemoveFile(int fileID) {
+        DBFile? file = Db.GetFile(fileID);
+        if (file != null) {
+            View.Print($"Processing file '{file.Filename}.{file.Extension}'... ", false);
+            Db.RemoveFile(fileID);
+            View.Print("Removed.");
+        }
     }
 
-    private void RemoveKeyword(string[] args)
-    {
-        if (args.Length != 2)
-        {
-            SetStatusCode(StatusCode.InvalidNumberOfArguments);
-            _view.PrintStatus(GetStatusCode());
+    private void RemoveKeyword(string[] args) {
+        if (args.Length != 2) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
             return;
         }
 
         string keyword = args[0].ToUpper();
         string path = args[1];
 
-        var fileIDs = _db.GetFileIDs(path, 'F');
-        if (fileIDs != null)
-        {
-            _view.Print($"Removing the keyword '{keyword}' from the specified file.");
-        }
-        else
-        {
-            fileIDs = _db.GetFileIDs(path, 'D');
-            if (fileIDs != null)
-            {
-                _view.Print($"Removing the keyword '{keyword}' from files in the specified directory.");
-                _view.Print($"(found {fileIDs.Count} file(s))");
+        var fileIDs = Db.GetFileIDs(path, 'F');
+        if (fileIDs != null) {
+            View.Print($"Removing the keyword '{keyword}' from the specified file.");
+        } else {
+            fileIDs = Db.GetFileIDs(path, 'D');
+            if (fileIDs != null) {
+                View.Print($"Removing the keyword '{keyword}' from files in the specified directory.");
+                View.Print($"(found {fileIDs.Count} file(s))");
             }
         }
 
-        if (fileIDs != null)
-        {
-            foreach (int fileId in fileIDs)
-            {
-                RemoveKeywordFromFile(keyword, fileId);
+        if (fileIDs != null) {
+            foreach (int fileID in fileIDs) {
+                RemoveKeywordFromFile(keyword, fileID);
             }
-        }
-        else
-        {
-            SetStatusCode(StatusCode.DbFileDirDoesNotExist);
-            _view.PrintStatus(GetStatusCode());
+        } else {
+            StatusCode = StatusCode.DbFileDirDoesNotExist;
+            View.PrintStatus(StatusCode);
         }
     }
 
-    private void RemoveKeywordFromFile(string keyword, int fileID)
-    {
-        DBFile file = _db.GetFile(fileID);
-        _view.Print($"Processing file '{file.GetFilename()}.{file.GetExtension()}'... ", false);
-        _db.RemoveKeyword(keyword, fileID);
-        _view.Print($"Ok (fileID = {fileID}).");
+    private void RemoveKeywordFromFile(string keyword, int fileID) {
+        DBFile? file = Db.GetFile(fileID);
+        if (file != null) {
+            View.Print($"Processing file '{file.Filename}.{file.Extension}'... ", false);
+            Db.RemoveKeyword(keyword, fileID);
+            View.Print($"Ok (fileID = {fileID}).");
+        }
     }
 
-    private void List(string[] args)
-    {
-        if (args.Length >= 1 && (args[0].ToUpper() == "KEYWORDS" || args[0].ToUpper() == "KEYS"))
-        {
+    private void List(string[] args) {
+        if (args.Length >= 1 && (args[0].ToUpper() == "KEYWORDS" || args[0].ToUpper() == "KEYS")) {
             ListKeywords(args[1..]);
             return;
         }
 
-        if (args.Length >= 1 && (args[0].ToUpper() == "DIRECTORIES" || args[0].ToUpper() == "DIRS" || args[0].ToUpper() == "FOLDERS"))
-        {
+        if (args.Length >= 1 && (args[0].ToUpper() == "DIRECTORIES" || args[0].ToUpper() == "DIRS" || args[0].ToUpper() == "FOLDERS")) {
             ListDirectories(args[1..]);
             return;
         }
@@ -483,360 +447,303 @@ public class CmdInterpreter
         List(args, false);
     }
 
-    private void List(string[] args, bool allDetails)
-    {
-        if (args.Length == 0)
-        {
-            _view.PrintDBStatistics(_db.GetDBStatistics());
+    private void List(string[] args, bool allDetails) {
+        if (args.Length == 0) {
+            View.PrintDBStatistics(Db.GetDBStatistics());
             return;
-        }
-        else if (args.Length > 1)
-        {
-            SetStatusCode(StatusCode.InvalidNumberOfArguments);
-            _view.PrintStatus(GetStatusCode());
+        } else if (args.Length > 1) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
             return;
         }
 
         string path = args[0];
         char detailsLevel = ' ';
-        var fileIds = _db.GetFileIDs(path, 'F');
+        var fileIDs = Db.GetFileIDs(path, 'F');
 
-        if (fileIds != null)
-        {
-            detailsLevel = allDetails ? 'A' : 'F';
-            _view.Print("The specified file exists in the database.");
-        }
-        else
-        {
-            fileIds = _db.GetFileIDs(path, 'D');
-            if (fileIds != null)
-            {
-                detailsLevel = allDetails ? 'A' : 'F';
-                _view.Print("The specified directory exists in the database.");
-                _view.Print($"(found {fileIds.Count} file(s))");
-            }
-            else
-            {
+        if (fileIDs != null) {
+            detailsLevel = allDetails ? 'A' : 'F'; // print all details or file info only
+            View.Print("The specified file exists in the database.");
+        } else {
+            fileIDs = Db.GetFileIDs(path, 'D');
+            if (fileIDs != null) {
+                detailsLevel = allDetails ? 'A' : 'F'; // print all details or file info only
+                View.Print("The specified directory exists in the database.");
+                View.Print($"(found {fileIDs.Count} file(s))");
+            } else {
                 string keyword = args[0].ToUpper();
-                fileIds = _db.GetFileIDs(keyword, 'K');
-                if (fileIds != null)
-                {
-                    detailsLevel = allDetails ? 'A' : 'D';
-                    _view.Print("The specified keyword exists in the database.");
-                    _view.Print($"(found {fileIds.Count} file(s))");
+                fileIDs = Db.GetFileIDs(keyword, 'K');
+                if (fileIDs != null) {
+                    detailsLevel = allDetails ? 'A' : 'D'; // print all details or file info + directory name
+                    View.Print("The specified keyword exists in the database.");
+                    View.Print($"(found {fileIDs.Count} file(s))");
                 }
             }
         }
 
-        if (fileIds != null)
-        {
-            foreach (int fileId in fileIds)
-            {
-                ListFileInfo(fileId, detailsLevel);
+        if (fileIDs != null) {
+            foreach (int fileID in fileIDs) {
+                ListFileInfo(fileID, detailsLevel);
             }
-        }
-        else
-        {
-            SetStatusCode(StatusCode.DbFileDirKeywordDoesNotExist);
-            _view.PrintStatus(GetStatusCode());
+        } else {
+            StatusCode = StatusCode.DbFileDirKeywordDoesNotExist;
+            View.PrintStatus(StatusCode);
         }
     }
 
-    private void ListFileInfo(int fileId, char detailsLevel)
-    {
-        DBFile file = _db.GetFile(fileId);
-        string filenameWithExtension = $"{file.GetFilename()}.{file.GetExtension()}";
-        string formattedTimestamp = FormatDateTime(file.GetTimestamp());
-        string fileSize = FileSystem.FormatFileSize(file.GetSize());
+    private void ListFileInfo(int fileID, char detailsLevel) {
+        DBFile file = Db.GetFile(fileID)!;
+        string filenameWithExtension = $"{file.Filename}.{file.Extension}";
+        string formattedTimestamp = FormatedDateTime(file.Timestamp);
+        string fileSize = FileSystem.FormatFileSize(file.Size);
         string prefix = "   ";
 
-        if (detailsLevel is 'F' or 'D')
-        {
-            if (filenameWithExtension.Length + fileSize.Length + 3 <= 60)
-            {
-                _view.Print($"{filenameWithExtension,-60}   {formattedTimestamp}   {fileSize}", false);
-            }
-            else
-            {
-                _view.Print($"{filenameWithExtension}   {formattedTimestamp}   {fileSize}", false);
+        if (detailsLevel is 'F' or 'D') { // File info or Directory info
+            if (filenameWithExtension.Length + fileSize.Length + 3 <= 60) {
+                View.Print($"{filenameWithExtension,-60}   {formattedTimestamp}   {fileSize}", false);
+            } else {
+                View.Print($"{filenameWithExtension}   {formattedTimestamp}   {fileSize}", false);
             }
 
-            if (file.GetKeywords().Contains("CHANGED"))
-                _view.Print(" (CHANGED)");
-            else if (file.GetKeywords().Contains("DELETED"))
-                _view.Print(" (DELETED)");
-            else
-                _view.Print("");
-
-            if (detailsLevel == 'D')
-                _view.Print($"{prefix}in: {file.GetLocation()}");
-
-            if (file.GetDuplicates().Count > 0)
-                _view.Print($"{prefix}Duplicates: {file.GetDuplicates().Count}");
-
-            if (file.GetPotentialDuplicates().Count > 0)
-                _view.Print($"{prefix}Potential duplicates: {file.GetPotentialDuplicates().Count}");
-        }
-        else if (detailsLevel == 'A')
-        {
-            _view.Print(filenameWithExtension);
-            _view.Print($"{prefix}in: {file.GetLocation()}");
-            _view.Print($"{prefix}ID: {file.GetID()}");
-            _view.Print($"{prefix}Timestamp: {formattedTimestamp}");
-            _view.Print($"{prefix}Size: {fileSize} ({file.GetSize()}byte(s))");
-            _view.Print($"{prefix}CRC32: {file.GetChecksum()}");
-
-            _view.Print($"{prefix}Keywords: ", false);
-            foreach (string keyword in file.GetKeywords())
-            {
-                _view.Print($"{keyword} ", false);
-            }
-            _view.Print("");
-
-            var duplicates = file.GetDuplicates();
-            if (duplicates.Count > 0)
-            {
-                _view.Print($"{prefix}Duplicates: {duplicates.Count}");
-                foreach (int dupId in duplicates)
-                    _view.Print($"{prefix}{prefix}{_db.GetFile(dupId).GetFullpath()}");
+            if (file.Keywords.Contains("CHANGED")) {
+                View.Print(" (CHANGED)");
+            } else if (file.Keywords.Contains("DELETED")) {
+                View.Print(" (DELETED)");
+            } else {
+                View.Print("");
             }
 
-            var potential = file.GetPotentialDuplicates();
-            if (potential.Count > 0)
-            {
-                _view.Print($"{prefix}Potential duplicates: {potential.Count}");
-                foreach (int dupId in potential)
-                    _view.Print($"{prefix}{prefix}{_db.GetFile(dupId).GetFullpath()}");
+            if (detailsLevel == 'D') { // Directory info
+                View.Print($"{prefix}in: {file.Location}");
             }
 
-            _view.Print($"{prefix}Metadata:");
-            foreach (var tag in file.GetMetadata())
-            {
-                _view.Print($"{prefix}{prefix}{tag.GetDirectory()} {tag.GetTag()} {tag.GetDescription()}");
+            if (file.Duplicates.Count > 0) {
+                View.Print($"{prefix}Duplicates: {file.Duplicates.Count}");
             }
 
-            _view.Print("------------------------------------------------------");
+            if (file.PotentialDuplicates.Count > 0) {
+                View.Print($"{prefix}Potential duplicates: {file.PotentialDuplicates.Count}");
+            }
+        } else if (detailsLevel == 'A') { // All info
+            View.Print(filenameWithExtension);
+            View.Print($"{prefix}in: {file.Location}");
+            View.Print($"{prefix}ID: {file.ID}");
+            View.Print($"{prefix}Timestamp: {formattedTimestamp}");
+            View.Print($"{prefix}Size: {fileSize} ({file.Size} byte(s))");
+            View.Print($"{prefix}CRC32: {file.Checksum}");
+
+            View.Print($"{prefix}Keywords: ", false);
+            foreach (string keyword in file.Keywords) {
+                View.Print($"{keyword} ", false);
+            }
+            View.Print("");
+
+            var duplicates = file.Duplicates;
+            if (duplicates.Count > 0) {
+                View.Print($"{prefix}Duplicates: {duplicates.Count}");
+                foreach (int duplicateFileID in duplicates) {
+                    DBFile duplicateFile = Db.GetFile(duplicateFileID)!;
+                    View.Print($"{prefix}{prefix}{duplicateFile.Fullpath}");
+                }
+            }
+
+            duplicates = file.PotentialDuplicates;
+            if (duplicates.Count > 0) {
+                View.Print($"{prefix}Potential duplicates: {duplicates.Count}");
+                foreach (int duplicateFileID in duplicates) {
+                    DBFile duplicateFile = Db.GetFile(duplicateFileID)!;
+                    View.Print($"{prefix}{prefix}{duplicateFile.Fullpath}");
+                }
+            }
+
+            View.Print($"{prefix}Metadata:");
+            foreach (var metadataTag in file.Metadata) {
+                View.Print($"{prefix}{prefix}{metadataTag.Directory} {metadataTag.Tag} {metadataTag.Description}");
+            }
+            View.Print("------------------------------------------------------");
         }
     }
 
-    private string FormatDateTime(string dateTime)
-    {
+    private string FormatedDateTime(string dateTime) {
         string year = dateTime[..4];
         string month = dateTime[4..6];
         string day = dateTime[6..8];
         string hour = dateTime[9..11];
         string minute = dateTime[11..13];
         string second = dateTime[13..15];
-        return $"{day}.{month}.{year} {hour}:{minute}:{second}";
+        string formattedDateTime = $"{day}.{month}.{year} {hour}:{minute}:{second}";
+        return formattedDateTime;
     }
 
-    private void ListKeywords(string[] args)
-    {
-        if (args.Length > 0)
-        {
-            SetStatusCode(StatusCode.InvalidNumberOfArguments);
-            _view.PrintStatus(GetStatusCode());
+    private void ListKeywords(string[] args) {
+        if (args.Length > 0) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
             return;
         }
 
-        _view.Print("List of keywords in the database:");
-        foreach (string keyword in _db.GetKeywords())
-        {
-            _view.Print($"   {keyword}");
+        View.Print("List of keywords in the database:");
+        foreach (string keyword in Db.GetKeywords()) {
+            View.Print($"   {keyword}");
         }
     }
 
-    private void ListDirectories(string[] args)
-    {
-        if (args.Length > 0)
-        {
-            SetStatusCode(StatusCode.InvalidNumberOfArguments);
-            _view.PrintStatus(GetStatusCode());
+    private void ListDirectories(string[] args) {
+        if (args.Length > 0) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
             return;
         }
 
-        _view.Print("List of directories in the database:");
-        foreach (string dir in _db.GetDirectories())
-        {
-            _view.Print($"   {dir}");
+        View.Print("List of directories in the database:");
+        foreach (string dir in Db.GetDirectories()) {
+            View.Print($"   {dir}");
         }
     }
 
-    private void Details(string[] args)
-    {
+    private void Details(string[] args) {
         List(args, true);
     }
 
-    private void Duplicates(string[] args)
-    {
-        if (args.Length != 1)
-        {
-            SetStatusCode(StatusCode.InvalidNumberOfArguments);
-            _view.PrintStatus(GetStatusCode());
+    private void Duplicates(string[] args) {
+        if (args.Length != 1) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
             return;
         }
 
         string path = args[0];
-        var fileIds = _db.GetFileIDs(path, 'F');
-
-        if (fileIds != null)
-        {
-            _view.Print("The specified file exists in the database.");
-        }
-        else
-        {
-            fileIds = _db.GetFileIDs(path, 'D');
-            if (fileIds != null)
-            {
-                _view.Print("The specified directory exists in the database.");
-                _view.Print($"(found {fileIds.Count} file(s))");
-            }
-            else
-            {
+        var fileIDs = Db.GetFileIDs(path, 'F');
+        if (fileIDs != null) {
+            View.Print("The specified file exists in the database.");
+        } else {
+            fileIDs = Db.GetFileIDs(path, 'D');
+            if (fileIDs != null) {
+                View.Print("The specified directory exists in the database.");
+                View.Print($"(found {fileIDs.Count} file(s))");
+            } else {
                 string keyword = path.ToUpper();
-                fileIds = _db.GetFileIDs(keyword, 'K');
-                if (fileIds != null)
-                {
-                    _view.Print("The specified keyword exists in the database.");
-                    _view.Print($"(found {fileIds.Count} file(s))");
+                fileIDs = Db.GetFileIDs(keyword, 'K');
+                if (fileIDs != null) {
+                    View.Print("The specified keyword exists in the database.");
+                    View.Print($"(found {fileIDs.Count} file(s))");
                 }
             }
         }
 
-        if (fileIds != null)
-        {
+        if (fileIDs != null) {
             var allDuplicatesFound = new Dictionary<int, int>();
-            foreach (var fileId in fileIds.ToList())
-            {
-                FindDuplicates(fileId, allDuplicatesFound);
+            foreach (var fileID in fileIDs.ToList()) {
+                FindDuplicates(fileID, allDuplicatesFound);
             }
-
-            if (allDuplicatesFound.Count == 0)
-            {
-                _view.Print("No duplicates found.");
+            if (allDuplicatesFound.Count == 0) {
+                View.Print("No duplicates found.");
             }
-        }
-        else
-        {
-            SetStatusCode(StatusCode.DbFileDirKeywordDoesNotExist);
-            _view.PrintStatus(GetStatusCode());
+        } else {
+            StatusCode = StatusCode.DbFileDirKeywordDoesNotExist;
+            View.PrintStatus(StatusCode);
         }
     }
 
-    private void FindDuplicates(int fileId, Dictionary<int, int> allDuplicatesFound)
-    {
-        var file = _db.GetFile(fileId);
-        _view.Print($"{file.GetFullpath()}... ", false);
+    private void FindDuplicates(int fileID, Dictionary<int, int> allDuplicatesFound) {
+        DBFile? file = Db.GetFile(fileID);
+        if (file == null) {
+            return;
+        }
+        View.Print($"{file.Fullpath}... ", false);
 
-        if (!allDuplicatesFound.TryGetValue(fileId, out var numOfDuplicates))
-        {
-            var newFound = _db.ProcessDuplicates(fileId);
-            foreach (var kvp in newFound)
-            {
-                allDuplicatesFound[kvp.Key] = kvp.Value;
+        // allDuplicatesFound contains all previously found duplicates,
+        // so, this allows to avoid processing already processed file IDs
+        if (!allDuplicatesFound.TryGetValue(fileID, out int numOfDuplicates)) { // get number of duplicates of fileID
+            // if fileID has not yet been processed
+            var newDuplicatesFound = Db.ProcessDuplicates(fileID); // finds and marks duplicates of fileID
+             // add found duplicates info to allDuplicatesFound
+            foreach (var key_value in newDuplicatesFound) {
+                allDuplicatesFound[key_value.Key] = key_value.Value;
             }
-            allDuplicatesFound.TryGetValue(fileId, out numOfDuplicates);
+            allDuplicatesFound.TryGetValue(fileID, out numOfDuplicates);  // get number of duplicates of fileID
         }
 
-        if (numOfDuplicates != 0)
-        {
-            _view.Print($"{numOfDuplicates} duplicate(s)");
-        }
-        else
-        {
-            _view.Print("no duplicates.");
+        if (numOfDuplicates != 0) {
+            View.Print($"{numOfDuplicates} duplicate(s)");
+        } else {
+            View.Print("no duplicates.");
         }
     }
 
-    private void Scan(string[] args)
-    {
-        if (args.Length != 1)
-        {
-            SetStatusCode(StatusCode.InvalidNumberOfArguments);
-            _view.PrintStatus(GetStatusCode());
+    private void Scan(string[] args) {
+        if (args.Length != 1) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
             return;
         }
 
         string path = args[0];
-        var fileIds = _db.GetFileIDs(path, 'F');
-
-        if (fileIds != null)
-        {
-            _view.Print("The specified file exists in the database.");
-        }
-        else
-        {
-            fileIds = _db.GetFileIDs(path, 'D');
-            if (fileIds != null)
-            {
-                _view.Print("The specified directory exists in the database.");
-                _view.Print($"(found {fileIds.Count} file(s))");
-            }
-            else
-            {
-                string keyword = path.ToUpper();
-                fileIds = _db.GetFileIDs(keyword, 'K');
-                if (fileIds != null)
-                {
-                    _view.Print("The specified keyword exists in the database.");
-                    _view.Print($"(found {fileIds.Count} file(s))");
+        var fileIDs = Db.GetFileIDs(path, 'F');
+        if (fileIDs != null) {
+            View.Print("The specified file exists in the database.");
+        } else {
+            fileIDs = Db.GetFileIDs(path, 'D');
+            if (fileIDs != null) {
+                View.Print("The specified directory exists in the database.");
+                View.Print($"(found {fileIDs.Count} file(s))");
+            } else {
+                string keyword = args[0].ToUpper();
+                fileIDs = Db.GetFileIDs(keyword, 'K');
+                if (fileIDs != null) {
+                    View.Print("The specified keyword exists in the database.");
+                    View.Print($"(found {fileIDs.Count} file(s))");
                 }
             }
         }
 
-        if (fileIds != null)
-        {
-            foreach (var fileId in fileIds.ToList())
-            {
-                ScanFile(fileId);
+        if (fileIDs != null) {
+            foreach (var fileID in fileIDs.ToList()) {
+                ScanFile(fileID);
             }
-        }
-        else
-        {
-            SetStatusCode(StatusCode.DbFileDirKeywordDoesNotExist);
-            _view.PrintStatus(GetStatusCode());
+        } else {
+            StatusCode = StatusCode.DbFileDirKeywordDoesNotExist;
+            View.PrintStatus(StatusCode);
         }
     }
 
-    private void ScanFile(int fileId)
-    {
-        var dbFile = _db.GetFile(fileId);
-        _view.Print($"{dbFile.GetFullpath()}... ", false);
+    private void ScanFile(int fileID) {
+        DBFile? oldFileInfo = Db.GetFile(fileID);
+        if (oldFileInfo == null) {
+            return;
+        }
+        View.Print($"{oldFileInfo.Fullpath}... ", false);
 
-        var currentFile = FileSystem.GetFileInformation(dbFile.GetFullpath());
+        var newFileInfo = FileSystem.GetFileInformation(oldFileInfo.Fullpath);
 
-        switch (FileSystem.GetStatusCode())
-        {
+        switch (FileSystem.StatusCode) {
             case StatusCode.NoError:
-                if (FileChanged(dbFile, currentFile))
-                {
-                    _db.AddKeyword("CHANGED", fileId);
-                    _db.RemoveKeyword("DELETED", fileId);
-                    _view.Print("CHANGED.");
-                }
-                else
-                {
-                    _db.RemoveKeyword("CHANGED", fileId);
-                    _db.RemoveKeyword("DELETED", fileId);
-                    _view.Print("ok.");
+                if (FileChanged(oldFileInfo, newFileInfo)) {
+                    Db.AddKeyword("CHANGED", fileID);
+                    Db.RemoveKeyword("DELETED", fileID);
+                    View.Print("CHANGED.");
+                } else {
+                    Db.RemoveKeyword("CHANGED", fileID);
+                    Db.RemoveKeyword("DELETED", fileID);
+                    View.Print("ok.");
                 }
                 break;
 
             case StatusCode.FileSystemError:
-                SetStatusCode(StatusCode.FileSystemError);
-                _view.Print("ERROR! (Error reading file)... Skipped.");
+                StatusCode = StatusCode.FileSystemError;
+                View.Print("ERROR! (Error reading file)... Skipped.");
                 break;
 
             case StatusCode.FileSystemNotFile:
-                _db.AddKeyword("DELETED", fileId);
-                _db.RemoveKeyword("CHANGED", fileId);
-                _view.Print("DELETED.");
+                Db.AddKeyword("DELETED", fileID);
+                Db.RemoveKeyword("CHANGED", fileID);
+                View.Print("DELETED.");
                 break;
 
             case StatusCode.FileSystemNotImage:
-                _db.AddKeyword("CHANGED", fileId);
-                _db.RemoveKeyword("DELETED", fileId);
-                _view.Print("CHANGED.");
+                Db.AddKeyword("CHANGED", fileID);
+                Db.RemoveKeyword("DELETED", fileID);
+                View.Print("CHANGED.");
                 break;
 
             default:
@@ -844,25 +751,22 @@ public class CmdInterpreter
         }
     }
 
-    private bool FileChanged(DBFile dbFile, DBFile currentFile)
-    {
-        var dbMeta = dbFile.GetMetadata();
-        var curMeta = currentFile.GetMetadata();
+    private bool FileChanged(DBFile oldFileInfo, DBFile newFileInfo) {
+        var oldMetadata = oldFileInfo.Metadata;
+        var newMetadata = newFileInfo.Metadata;
 
-        if (dbFile.GetTimestamp() != currentFile.GetTimestamp() ||
-            dbFile.GetSize() != currentFile.GetSize() ||
-            dbFile.GetChecksum() != currentFile.GetChecksum() ||
-            dbMeta.Count != curMeta.Count)
-        {
+        if (oldFileInfo.Timestamp != newFileInfo.Timestamp ||
+            oldFileInfo.Size != newFileInfo.Size ||
+            oldFileInfo.Checksum != newFileInfo.Checksum ||
+            oldMetadata.Count != newMetadata.Count) {
             return true;
         }
 
-        foreach (var dbTag in dbMeta)
-        {
-            bool found = curMeta.Any(curTag =>
-                dbTag.GetDirectory() == curTag.GetDirectory() &&
-                dbTag.GetTag() == curTag.GetTag() &&
-                dbTag.GetDescription() == curTag.GetDescription());
+        foreach (var oldMetadataInfo in oldMetadata) {
+            bool found = newMetadata.Any(newMetadataInfo =>
+                oldMetadataInfo.Directory == newMetadataInfo.Directory &&
+                oldMetadataInfo.Tag == newMetadataInfo.Tag &&
+                oldMetadataInfo.Description == newMetadataInfo.Description);
 
             if (!found)
                 return true;
